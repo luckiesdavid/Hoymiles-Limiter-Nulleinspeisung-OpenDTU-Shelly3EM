@@ -5,12 +5,13 @@ import logging
 from datetime import datetime, timedelta
 import os
 from pv_limiter_mqtt import send_mqtt
+import json
 
 ###
 dtu_ip = '192.168.178.203'  # IP-Adresse von OpenDTU
 dtu_nutzer = 'xxx'  # OpenDTU Nutzername
 dtu_passwort = 'xxx'  # OpenDTU Passwort
-count_inv = 4  # how many inverters in OpenDTU? (for safety reasons)
+count_inv = 0  # how many inverters in OpenDTU? (for safety reasons)
 
 shelly_ip = '192.168.178.93'  # IP Adresse von Shelly 3EM
 hichi_ip = '10.0.1.130'
@@ -40,6 +41,7 @@ reachable = None
 producing = None
 setpoint = None
 old_limit_all = None
+simu_count = 0
 
 # Logging konfigurieren
 os.makedirs("logs", exist_ok=True)
@@ -70,7 +72,7 @@ def read_opendtu():
                 break
     # read old_limit only once
     #if rec_old_limit == False:
-        # Inverter Serials for up to 10 Inverters
+    # Inverter Serials for up to 10 Inverters
     old_limit = []  # limits restore
     for i in range(10):
         try:
@@ -171,32 +173,46 @@ def set_limit():
         print(f'Fehler beim Senden der Konfiguration: \n {e}')
         logging.error(f'Fehler beim Senden der Konfiguration: \n {e}')
 
+def simulation(simu_count):
+    global reachable, grid_sum, power, old_limit_all, max_power_all
+    ###### Simulation ######
+    # static
+    reachable = True
+    max_power_all = 3500
+    # dynamic
+    with open("simulation.json", "r") as file:
+        r = json.load(file)
+        #print(count)
+        for i in range(simu_count):
+            grid_sum = r['simu']['grid_sum'][i]
+            power = r['simu']['power'][i]
+            old_limit_all = r['simu']['old_limit_all'][i]
+
 
 if __name__ == '__main__':
     while True:
         try:
-            read_opendtu()
+            #read_opendtu()
             # max_power reading only once
-            if rec_max_power == False:
-                read_maxpower()
-            read_shelly()
+            #if rec_max_power == False:
+            #    read_maxpower()
+            #read_shelly()
             #read_hichi()
-            if rec_setpoint_factor == False and max_power_all != 0:
-                inv_factor()
-            read_efficency()
+            #if rec_setpoint_factor == False and max_power_all != 0:
+            #    inv_factor()
+            #read_efficency()
+            print("")
         except Exception as e:
             print(f'Fehler beim Abrufen der Daten {e}')
 
-        ###### Simulation ######
-        #reachable = True
-        #grid_sum = -1000
-        ##altes_limit = 3500 #3500W = kein Limit // 0W = voll Limit
-        #power = 2000
+        ###### Simulation wit simulation.json ######
+        simu_count += 1
+        simulation(simu_count)
 
 
         # Werte setzen
-        print(f"Seriennummern: {serials} mit max_power: {max_power} ")
-        print(f'\nBezug: {round(grid_sum, 1)} W, Produktion: {round(power, 1)} W, altes_Limit: {round(old_limit_all, 1)} W')
+        #print(f"Seriennummern: {serials} mit max_power: {max_power} ")
+        print(f'Bezug: {round(grid_sum, 1)} W, Produktion: {round(power, 1)} W, altes_Limit: {round(old_limit_all, 1)} W')
         logging.info(f'Bezug: {round(grid_sum, 1)} W,\t Produktion: {round(power, 1)} W,\t altes_Limit: {round(old_limit_all, 1)} W')
 
 
@@ -206,7 +222,7 @@ if __name__ == '__main__':
                 # Export
                 if grid_sum < offset_grid:
                     #setpoint = (grid_sum + power) - offset_grid  # *-1
-                    setpoint = (grid_sum + power) - offset_grid# deleted offset_grid
+                    setpoint = (grid_sum + power) - (offset_grid/2)# deleted offset_grid
 
                     #  upper Limit
                     if setpoint > max_power_all:
@@ -254,4 +270,4 @@ if __name__ == '__main__':
 
 
         sys.stdout.flush()  # write out cached messages to stdout
-        time.sleep(20)  # wait
+        time.sleep(2)  # wait
