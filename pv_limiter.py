@@ -4,7 +4,6 @@ from requests.auth import HTTPBasicAuth
 import logging
 from datetime import datetime, timedelta
 import os
-from pv_limiter_mqtt import send_mqtt
 import json
 
 ###
@@ -257,6 +256,7 @@ if __name__ == '__main__':
 
         # MQTT
         if mqtt:
+            from pv_limiter_mqtt import send_mqtt
             topic = "pv_limiter_py/"
             payload = {
                 "grid": grid_sum,
